@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shape Brain Trainer</title>
+<meta name="description" content="Train a tiny k-nearest-neighbour classifier in the browser by drawing circles, triangles, squares and stars.">
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Nunito:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="mx-auto w-full max-w-[1200px] px-4" style="padding-block:24px 32px">
+
+  <header class="flex flex-wrap items-end justify-between gap-5">
+    <div class="min-w-0">
+      <p class="eyebrow">AI Innovation Club &middot; Quick Draw lab</p>
+      <h1 class="font-display text-3xl md:text-4xl font-bold leading-tight mt-1">Shape Brain Trainer</h1>
+      <p class="mt-2 max-w-[62ch] text-[15px] t-muted">
+        This computer knows nothing yet. Draw a shape, press the button that says what it is, and it
+        remembers. Every guess it makes is real maths running inside this page &mdash; no internet, no cheating.
+      </p>
+    </div>
+    <div class="flex flex-wrap items-center gap-3">
+      <div class="panel px-4 py-3 text-center">
+        <div id="dataCount" class="font-display text-4xl font-bold leading-none tnum t-emerald">0</div>
+        <div class="eyebrow mt-1">Data points collected</div>
+      </div>
+      <div class="flex flex-col gap-2">
+        <button id="soundBtn" class="btn text-[13px]" aria-pressed="true">Voice: on</button>
+        <button id="resetBtn" class="btn btn-danger text-[13px]">Reset brain</button>
+      </div>
+    </div>
+  </header>
+
+  <section class="panel mt-5 px-4 py-4">
+    <div class="flex flex-wrap items-center justify-between gap-2">
+      <span class="step-tag"><span id="liveDot" class="dot"></span>AI brain upgrade level</span>
+      <p class="font-display text-sm">
+        <span id="levelName" class="font-bold t-emerald">Blank Slate</span>
+        <span class="t-muted"> &middot; level <span id="levelNum" class="tnum">0</span> of 5</span>
+      </p>
+    </div>
+    <div id="xpBar" class="xp-track mt-3" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="Progress to the next brain level">
+      <div id="xpFill"></div>
+    </div>
+    <p id="xpHint" class="mt-2 text-xs t-muted">Feed me 4 drawings to reach level 1.</p>
+  </section>
+
+  <div class="mt-5 grid gap-5 lg:grid-cols-2">
+
+    <section class="panel p-4 md:p-5">
+      <div class="flex items-center justify-between gap-3">
+        <span class="step-tag"><i>1</i>Your drawing pad</span>
+        <span class="font-mono text-[11px] t-muted">450 &times; 450 px</span>
+      </div>
+
+      <div id="padFrame" class="pad-frame mt-3">
+        <canvas id="pad" width="450" height="450" aria-label="Drawing pad. Draw a shape with the mouse or your finger."></canvas>
+        <div id="padHint" class="pad-hint">
+          <div class="text-2xl">&#9998;</div>
+          <div class="mt-1 text-sm">Draw a big shape here</div>
+        </div>
+      </div>
+
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <button id="undoBtn" class="btn text-[13px]">Undo stroke <span class="opacity-60">(U)</span></button>
+        <button id="clearBtn" class="btn text-[13px]">Clear pad <span class="opacity-60">(C)</span></button>
+        <label for="autoClear" class="ml-auto flex cursor-pointer items-center gap-2 text-xs t-muted">
+          <input id="autoClear" type="checkbox" checked class="h-4 w-4" style="accent-color:var(--cyan)">
+          Clear after training
+        </label>
+      </div>
+
+      <div class="mt-5">
+        <span class="step-tag"><i>2</i>Teach it what you drew</span>
+        <div id="trainBtns" class="mt-3 grid gap-2 sm:grid-cols-2"></div>
+        <p class="mt-3 text-xs t-muted">Draw the same shape a few times, in different sizes and corners. More memories, better guesses.</p>
+      </div>
+    </section>
+
+    <div class="grid content-start gap-5">
+
+      <section class="panel p-4 md:p-5">
+        <span class="step-tag"><i>3</i>What the computer sees</span>
+        <div class="mt-3 flex flex-wrap items-start gap-4">
+          <canvas id="pixels" width="280" height="280" aria-label="Your drawing squashed into a 28 by 28 grid of ones and zeros"></canvas>
+          <div class="flex-1 basis-[230px] min-w-0 text-[13px] leading-relaxed">
+            <p class="t-muted">
+              Your 202,500 canvas pixels get squashed into a <strong class="t-text">28 &times; 28 grid</strong> &mdash;
+              <strong class="t-text">784 numbers</strong>, each one a <strong class="t-cyan">1</strong> (ink) or a <strong>0</strong> (empty).
+              That list of 784 numbers is the only thing the AI ever looks at.
+            </p>
+            <dl class="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 font-mono text-[11.5px]">
+              <dt class="t-muted">ink cells</dt><dd id="statOn" class="tnum">0 / 784</dd>
+              <dt class="t-muted">ink box</dt><dd id="statBox" class="tnum">&mdash;</dd>
+              <dt class="t-muted">block size</dt><dd id="statStep" class="tnum">&mdash;</dd>
+              <dt class="t-muted">hover cell</dt><dd id="statCursor" class="tnum">&mdash;</dd>
+            </dl>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel p-4 md:p-5">
+        <span class="step-tag"><i>4</i>The AI's guess</span>
+        <div id="verdict" class="verdict mt-3 empty">
+          <p id="verdictText" class="font-display text-lg font-bold" aria-live="polite">I haven't learned anything yet!</p>
+          <p id="verdictSub" class="mt-1 text-[13px] t-muted">Draw a shape, then press a training button so I have something to compare against.</p>
+        </div>
+        <div id="bars" class="mt-4 grid gap-3"></div>
+        <p class="mt-3 font-mono text-[11px] t-muted">confidence = neighbour votes weighted by 1 / (1 + distance)</p>
+      </section>
+
+      <section class="panel p-4 md:p-5">
+        <div class="flex items-center justify-between gap-3">
+          <span class="step-tag"><i>5</i>Brain log</span>
+          <button id="logClear" class="btn px-2.5 py-1 text-[11px]">Clear log</button>
+        </div>
+        <div id="log" class="mt-3" role="log" aria-live="polite" aria-label="Brain log"></div>
+        <p class="mt-2 font-mono text-[11px] t-muted">distance = &radic;&Sigma;(pixelA &minus; pixelB)&sup2; across all 784 pixels</p>
+      </section>
+
+    </div>
+  </div>
+
+  <section class="panel mt-5 p-4 md:p-5" aria-labelledby="dreamHeading">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <span id="dreamHeading" class="step-tag"><i>6</i>AI imagination</span>
+      <span class="font-mono text-[11px] t-muted">memories + randomness = a brand-new shape</span>
+    </div>
+
+    <div class="mt-4 grid gap-5 lg:grid-cols-[354px_minmax(0,1fr)]">
+      <div class="dream-frame">
+        <canvas id="dream" width="336" height="336" aria-label="The shape the AI imagined, drawn as a 28 by 28 grid"></canvas>
+      </div>
+
+      <div class="flex min-w-0 flex-col gap-4">
+        <div id="dreamCard" class="verdict">
+          <p id="dreamTitle" class="font-display text-lg font-bold" aria-live="polite">Nothing imagined yet.</p>
+          <p id="dreamSub" class="mt-1 text-[13px] t-muted">Pick a shape and I will invent a brand-new one from my memories. No memories means pure static.</p>
+        </div>
+
+        <div>
+          <div id="dreamBtns" class="grid gap-2 sm:grid-cols-2 xl:grid-cols-4"></div>
+          <button id="dreamSurprise" class="btn mt-2 w-full text-[13px]">Surprise me <span class="opacity-60">(D)</span></button>
+        </div>
+
+        <dl class="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div class="stat-tile"><dt class="eyebrow">Built from</dt><dd id="dreamFrom" class="font-mono text-[13px] tnum">&mdash;</dd></div>
+          <div class="stat-tile"><dt class="eyebrow">Noise level</dt><dd id="dreamNoise" class="font-mono text-[13px] tnum">&mdash;</dd></div>
+          <div class="stat-tile"><dt class="eyebrow">Ink pixels</dt><dd id="dreamInk" class="font-mono text-[13px] tnum">&mdash;</dd></div>
+          <div class="stat-tile"><dt class="eyebrow">Self-check</dt><dd id="dreamCheck" class="font-mono text-[13px] tnum">&mdash;</dd></div>
+        </dl>
+
+        <p class="max-w-[72ch] text-[13px] leading-relaxed t-muted">
+          <strong class="t-text">How it imagines:</strong> it blends a random mix of its memories of that shape into a map of
+          how likely each pixel is to be ink, stirs in some randomness, then flips a weighted coin for all 784 pixels.
+          Fewer memories means more randomness. Zero memories means every coin is 50/50, which is pure static.
+        </p>
+
+        <div>
+          <p class="eyebrow">Recent dreams</p>
+          <div id="dreamGallery" class="mt-2 flex flex-wrap gap-3"></div>
+          <p id="dreamEmpty" class="mt-2 text-xs t-muted">Nothing dreamed yet. Your AI's inventions will line up here.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="mt-6 flex flex-wrap items-center justify-between gap-3 text-xs t-muted">
+    <p>Keys: <span class="font-mono">1</span> circle &middot; <span class="font-mono">2</span> triangle &middot; <span class="font-mono">3</span> square &middot; <span class="font-mono">4</span> star &middot; <span class="font-mono">U</span> undo &middot; <span class="font-mono">C</span> clear &middot; <span class="font-mono">D</span> dream &middot; <span class="font-mono">V</span> voice &middot; <span class="font-mono">R</span> reset</p>
+    <p>k-nearest neighbours, k = <span id="kShown" class="font-mono tnum">0</span> &middot; plain JavaScript, nothing leaves this tab</p>
+  </footer>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
